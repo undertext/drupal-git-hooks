@@ -21,4 +21,7 @@ In order to commit your changes, your code must pass the three filters:
 
    You can alter blacklisted functions by changing <code>$checks</code> variable.
 
-   
+
+Example of pre-commit hook output
+-----------------------------------
+[![example output](https://github.com/undertext/drupal-git-hooks/blob/master/docs/output.png)]
