@@ -1,0 +1,11 @@
+#!/usr/bin/php
+<?php
+$message = file_get_contents($argv[1]);
+
+exec("git rev-parse --abbrev-ref HEAD", $branch);
+$branch = $branch[0];
+
+if (strpos($message, $branch) !== 0){
+  echo "Commit message do not contain branch name." . PHP_EOL;
+  exit(1);
+}

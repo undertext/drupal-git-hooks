@@ -51,7 +51,7 @@ $parsedFiles = array('modified', 'added', 'new file');
 
 // Non parsed files.
 $notParsedFiles = array('libraries', 'features',
-  ".pages2_default.inc", ".panels_default.inc", ".strongarm.inc", ".field_instance.inc",
+  ".pages_default.inc", ".panels_default.inc", ".strongarm.inc", ".field_instance.inc",
   ".views_default.inc", ".panelizer.inc", ".variable.inc", ".features.webform.inc",
   ".ckeditor_profile.inc", ".ctools_content.inc");
 
