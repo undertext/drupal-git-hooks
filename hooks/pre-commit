@@ -17,8 +17,52 @@ echo <<<EOD
 *   II. Coding standards checking using PHP Code Sniffer               *
 *   III. Blacklisted functions checking/validation.                    *
 *                                                                      *
-************************************************************************\n\n"
+************************************************************************\n\n
 EOD;
+
+/**
+ * Output text with background. (Works only for *nix systems)
+ */
+function colorize($text, $status) {
+  $out = "";
+  switch($status) {
+    case "SUCCESS":
+      $out = "[42m"; //Green background
+      break;
+    case "FAILURE":
+      $out = "[41m"; //Red background
+      break;
+    case "WARNING":
+      $out = "[43m"; //Yellow background
+      break;
+    case "NOTE":
+      $out = "[44m"; //Blue background
+      break;
+    default:
+      throw new Exception("Invalid status: " . $status);
+  }
+  return chr(27) . "$out" . "$text" . chr(27) . "[0m";
+}
+
+$exitCode = 0;
+
+// Generate the list of files to be parsed.
+$parsedFiles = array('modified', 'added', 'new file');
+
+// Non parsed files.
+$notParsedFiles = array('libraries', 'features',
+  ".pages2_default.inc", ".panels_default.inc", ".strongarm.inc", ".field_instance.inc",
+  ".views_default.inc", ".panelizer.inc", ".variable.inc", ".features.webform.inc",
+  ".ckeditor_profile.inc", ".ctools_content.inc");
+
+// File extensions to check with php lint.
+$phpLintExtensions = array('php', 'module', 'inc', 'install', 'test', 'profile', 'theme');
+
+// File extensions to check with php Code Sniffer.
+$phpSnifferExtensions = array('php', 'module', 'inc', 'install', 'test', 'profile', 'theme', 'info');
+
+// File extensions for searching blacklisted functions.
+$blackListedFileExtensions = array('install', 'test', 'inc', 'module', 'php');
 
 $checks = array(
   // PHP blacklisted functions.
@@ -37,7 +81,6 @@ $checks = array(
   'dpq(',
   'dprint_r(',
   'drupal_debug(',
-  'dsm(',
   'dvm(',
   'dvr(',
   'kpr(',
@@ -51,66 +94,76 @@ $checks = array(
   'alert('
 );
 
-// Generate the list of files to be parsed.
-// Include the modified/added files indicated in the output of the Git status command.
-$filters_include = array('modified', 'added', 'new file');
+// Run git status command.
+exec('git status' , $gitStatusOutput);
+//Filter for files that should be parsed.
+$gitStatusOutput = preg_grep("/.*(" . implode('|', $parsedFiles) . ")/", $gitStatusOutput);
+//Filter out things that should not be parsed.
+$gitStatusOutput = preg_grep("/.*(" . implode('|', $notParsedFiles) . ")/", $gitStatusOutput, PREG_GREP_INVERT);
 
-// Generate the list of excluded files.
-$filters_exclude = array('libraries');
-
-$grep_string = implode('\|', $filters_include);
-$egrep_string = implode('\|', $filters_exclude);
-
-// @todo Get rid of grep pipeline.
-exec("git status | grep -e \".*\\({$grep_string}\\)\" | egrep -v \".*\\({$egrep_string}\\)\"", $output);
-
+//Get file names to process and output them.
 $files = array();
-
 echo "File(s) to be processed/validated:" . PHP_EOL;
-foreach ($output as $line) {
+foreach ($gitStatusOutput as $line) {
   $file = trim(substr($line, 13));
   $files[] = $file;
-  echo $file . PHP_EOL;
+  echo "  - " . $file . PHP_EOL;
 }
 
-$sniffer_errors_count = 0;
-
+// Process each file.
 foreach ($files as $file) {
-  echo "Validating $file..." . PHP_EOL . PHP_EOL;
+  echo PHP_EOL . "Validating $file..." . PHP_EOL;
+
+  $fileExt = pathinfo($file, PATHINFO_EXTENSION);
+
+  // Run "php -l" to check syntax of the file.
   echo "I. Running PHP Linter" . PHP_EOL;
-  exec("php -l $file", $lint_output, $lint_status_code);
-  if ($lint_status_code == 0) {
-    echo "II. Running the PHP Code Sniffer..." . PHP_EOL;
-    exec("phpcs --standard=Drupal $file", $sniffer_output, $sniffer_status_code);
-    if (!$sniffer_status_code) {
-      echo "No formatting errors detected" . PHP_EOL;
-    }
-    else {
-      foreach ($sniffer_output as $line) {
-        print $line . PHP_EOL;
+  if (in_array($fileExt, $phpLintExtensions)) {
+    exec("php -l $file", $lintOutput, $lintStatusCode);
+    // Do not run any other checks if file syntax is wrong.
+    if ($lintStatusCode != 0){
+      $exitCode = 1;
+      foreach ($lintOutput as $line) {
+        echo colorize($line, "FAILURE") . PHP_EOL;
       }
-      $sniffer_errors_count++;
+      echo PHP_EOL . colorize("You have syntax error in your code. Please fix it.", "FAILURE") . PHP_EOL;
+      continue;
     }
   }
   else {
-    foreach ($lint_output as $line) {
-      print $line;
-    }
-    echo "You have syntax error in your code. Please fix and commit your changes again." . PHP_EOL;
-    exit(1);
+    echo colorize("Skipping...", "NOTE") . PHP_EOL;
   }
 
-  $check_errors = array();
+  // Run code Sniffer checks.
+  echo "II. Running the PHP Code Sniffer..." . PHP_EOL;
+  if (in_array($fileExt, $phpSnifferExtensions)) {
+    exec("phpcs --standard=Drupal $file", $snifferOutput, $snifferStatusCode);
+    // Display sniffer errors if we have them.
+    if ($snifferStatusCode != 0){
+      $exitCode = 1;
+      foreach ($snifferOutput as $line) {
+        echo colorize($line, "FAILURE") . PHP_EOL;
+      }
+    }
+  }
+  else {
+    echo colorize("Skipping...", "NOTE") . PHP_EOL;
+  }
 
-  $ext = pathinfo($file, PATHINFO_EXTENSION);
-  if (in_array($ext, array('install', 'test', 'inc', 'module', 'php'))) {
+  // Search for blacklisted functions in the file.
+  echo "III. Running the checker/validator for blacklisted functions..." . PHP_EOL;
+  $check_errors = array();
+  if (in_array($fileExt, $blackListedFileExtensions)) {
     $handle = fopen($file, 'r');
+    $lineNumber = 0;
     while (($buffer = fgets($handle)) !== FALSE) {
+      $lineNumber++;
       foreach ($checks as $check) {
-        if (!isset($check_errors[$check])) {
-          if (strpos($buffer, $check) !== FALSE) {
-            $check_errors[$check] = "$check found in file $file" . PHP_EOL;
-          }
+        if (strpos($buffer, $check) !== FALSE) {
+          $exitCode = 1;
+          $message = "$check found on line $lineNumber";
+          $check_errors[] = $message;
+          echo colorize($message, "FAILURE") . PHP_EOL;
         }
       }
     }
@@ -119,24 +172,10 @@ foreach ($files as $file) {
 
 }
 
-if ($sniffer_errors_count > 0) {
-  echo "Your commits failed to pass the PHP code sniffer validation." . PHP_EOL;
-  echo "Kindly fix the code sniffer notices." . PHP_EOL . PHP_EOL;
-  exit(1);
-}
-
-echo "III. Running the checker/validator for blacklisted functions..." . PHP_EOL;
-if (!empty($check_errors)) {
-  echo "These errors were found in try-to-commit files:" . PHP_EOL;
-  foreach ($check_errors as $check_error) {
-    echo $check_error;
-  }
-
-  echo PHP_EOL . "Can't commit your changes, fix the generated errors first." . PHP_EOL;
-  exit(1);
+if ($exitCode == 0) {
+  echo  PHP_EOL . colorize("Congratulations! You have passed all the filters, your code has now been committed.", "SUCCESS") . PHP_EOL;
 }
 else {
-  echo "No backlisted function(s) detected." . PHP_EOL . PHP_EOL;
+  echo PHP_EOL . colorize("Can't commit your changes, fix the generated errors first.", "FAILURE") . PHP_EOL;
+  exit(1);
 }
-
-echo "Congratulations! You have passed all the filters, your code has now been committed." . PHP_EOL;
