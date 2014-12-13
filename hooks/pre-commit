@@ -92,7 +92,7 @@ $checks = array(
 );
 
 // Get staged file names.
-exec('git diff --name-only --cached' , $gitStatusOutput);
+exec('git diff --name-only --cached --diff-filter=ACM' , $gitStatusOutput);
 //Filter out things that should not be parsed.
 $gitStatusOutput = preg_grep("/.*(" . implode('|', $notParsedFiles) . ")/", $gitStatusOutput, PREG_GREP_INVERT);
 
