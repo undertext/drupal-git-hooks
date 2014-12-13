@@ -63,32 +63,32 @@ $blackListedFileExtensions = array('install', 'test', 'inc', 'module', 'php');
 
 $checks = array(
   // PHP blacklisted functions.
-  'var_dump(',
-  'print_r(',
-  'die(',
+  'var_dump\(',
+  'print_r\(',
+  'die\(',
   // Built-in debugging function.
-  'debug(',
+  'debug\(',
   // Devel's debugging functions.
-  'dpm(',
-  'krumo(',
-  'dpr(',
-  'dsm(',
-  'dd(',
-  'ddebug_backtrace(',
-  'dpq(',
-  'dprint_r(',
-  'drupal_debug(',
-  'dvm(',
-  'dvr(',
-  'kpr(',
-  'kprint_r(',
-  'kdevel_print_object(',
+  'dpm\(',
+  'krumo\(',
+  'dpr\(',
+  'dsm\(',
+  'dd\(',
+  'ddebug_backtrace\(',
+  'dpq\(',
+  'dprint_r\(',
+  'drupal_debug\(',
+  'dvm\(',
+  'dvr\(',
+  'kpr\(',
+  'kprint_r\(',
+  'kdevel_print_object\(',
   // Code conflicts resulting from Git merge.
   '<<<<<<<',
   '>>>>>>>',
   // Javascript debugging functions.
-  'console.log(',
-  'alert('
+  'console.log\(',
+  'alert\('
 );
 
 // Get staged file names.
@@ -153,9 +153,9 @@ foreach ($files as $file) {
     while (($buffer = fgets($handle)) !== FALSE) {
       $lineNumber++;
       foreach ($checks as $check) {
-        if (strpos($buffer, $check) !== FALSE) {
+        if (preg_match('/\b' . $check . '/', $buffer)) {
           $exitCode = 1;
-          $message = "$check found on line $lineNumber";
+          $message = "Blacklisted '". str_replace(array('\\', '('), '', $check) . "' found on line $lineNumber";
           $check_errors[] = $message;
           echo colorize($message, "FAILURE") . PHP_EOL;
         }
