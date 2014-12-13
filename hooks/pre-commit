@@ -46,9 +46,6 @@ function colorize($text, $status) {
 
 $exitCode = 0;
 
-// Generate the list of files to be parsed.
-$parsedFiles = array('modified', 'added', 'new file');
-
 // Non parsed files.
 $notParsedFiles = array('libraries', 'features',
   ".pages_default.inc", ".panels_default.inc", ".strongarm.inc", ".field_instance.inc",
@@ -94,18 +91,15 @@ $checks = array(
   'alert('
 );
 
-// Run git status command.
-exec('git status' , $gitStatusOutput);
-//Filter for files that should be parsed.
-$gitStatusOutput = preg_grep("/.*(" . implode('|', $parsedFiles) . ")/", $gitStatusOutput);
+// Get staged file names.
+exec('git diff --name-only --cached' , $gitStatusOutput);
 //Filter out things that should not be parsed.
 $gitStatusOutput = preg_grep("/.*(" . implode('|', $notParsedFiles) . ")/", $gitStatusOutput, PREG_GREP_INVERT);
 
 //Get file names to process and output them.
 $files = array();
 echo "File(s) to be processed/validated:" . PHP_EOL;
-foreach ($gitStatusOutput as $line) {
-  $file = trim(substr($line, 13));
+foreach ($gitStatusOutput as $file) {
   $files[] = $file;
   echo "  - " . $file . PHP_EOL;
 }
